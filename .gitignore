@@ -1,0 +1,23 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+
+# Environment variables
+.env*.local
+
+# Firebase Admin service account keys (see lib/firebase-admin.ts) — never commit these
+*firebase-adminsdk*.json
+serviceAccountKey.json
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+
+# TypeScript
+next-env.d.ts
+*.tsbuildinfo

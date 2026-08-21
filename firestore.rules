@@ -1,0 +1,114 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// IMPORTANT CAVEAT — read before trusting these rules as a complete boundary
+// ---------------------------------------------------------------------------
+// The Google Apps Script that syncs Banco Guayaquil bank-notification emails
+// (into financeMovements) and Apple Health data (into bodyWeight, doc ids
+// like "health_{date}") does NOT authenticate as this app's Firebase Auth
+// users. It calls the Firestore REST API directly using a token from
+// ScriptApp.getOAuthToken() — a Google Cloud IAM-scoped OAuth token requested
+// with the "datastore" scope. That request is authorized by Cloud IAM
+// (the script owner's Google Cloud project permissions), which is a
+// completely separate permission system from Firestore Security Rules below.
+// These rules do NOT constrain that script's reads/writes in any way — they
+// only constrain the web app's Firebase-Auth-based client reads/writes.
+// For a single-owner personal project this is expected and fine, but it
+// means this file is not a complete security boundary for every write path
+// into this database; the Apps Script + its Google Cloud IAM permissions are
+// an equally load-bearing (separate) boundary.
+//
+// SECOND bypass, added for the multi-user Gmail sync (app/api/gmail/*,
+// app/api/cron/sync-gmail): those Next.js server routes use the Firebase
+// ADMIN SDK (lib/firebase-admin.ts, a service account key), which — like
+// Apps Script's IAM token — also completely bypasses these rules. That's
+// intentional: gmailSyncTokens/{uid} below is set to allow nothing from the
+// client specifically BECAUSE only the Admin SDK is meant to ever touch it.
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny: anything not explicitly matched below is inaccessible.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /users/{uid} {
+      // Root user doc: hobbies, tasks, expenses, budget, totalXp,
+      // financeBudget, nutritionProfile/nutritionTargets, and other simple
+      // state fields (see lib/game-context.tsx, lib/movements.ts, lib/nutrition.ts).
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Bank/manual finance transactions. Some are written by the Apps
+      // Script sync with automatic == true; the web client is allowed to
+      // create/update but must never be allowed to delete those docs.
+      match /financeMovements/{movementId} {
+        allow read, create, update: if request.auth != null && request.auth.uid == uid;
+        allow delete: if request.auth != null
+          && request.auth.uid == uid
+          && resource.data.automatic != true;
+      }
+
+      // Savings/finance goals (target amount, progress, deadline).
+      match /financeGoals/{goalId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Recurring subscriptions/bills (amount, billing cycle, next payment date).
+      match /financeSubscriptions/{subscriptionId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // User-defined gym routines (exercise/sets/reps templates).
+      match /gymRoutines/{routineId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Logged gym workouts (date, exercises performed, sets/reps/weight).
+      match /gymWorkouts/{workoutId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Body measurement entries (chest/waist/hips/etc. over time).
+      match /bodyMeasurements/{measurementId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Logged meals (name, macros, calories, date).
+      match /nutritionMeals/{mealId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Daily water intake, one doc per ISO date string (doc id == date).
+      match /nutritionWater/{date} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Body weight entries; also written by the Apps Script Apple Health
+      // sync (doc ids like "health_{date}") via Cloud IAM, not Firebase Auth
+      // — see the caveat at the top of this file.
+      match /bodyWeight/{entryId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // FCM device push tokens (doc id == the token itself). Only the client
+      // writes these (on notification-permission grant); the Apps Script
+      // only READS them via Cloud IAM (see the caveat at the top) to send
+      // push notifications — it never writes here.
+      match /pushTokens/{tokenId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Gmail OAuth refresh tokens for the multi-user bank-email sync
+    // (app/api/gmail/oauth/callback writes it, app/api/cron/sync-gmail reads
+    // it). Deliberately allows NOTHING from any client, ever — a refresh
+    // token is a standing credential to read someone's Gmail, it must never
+    // be readable by client-side JS. Only the Admin SDK (which bypasses
+    // rules) is meant to touch this collection.
+    match /gmailSyncTokens/{uid} {
+      allow read, write: if false;
+    }
+  }
+}

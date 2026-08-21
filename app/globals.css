@@ -1,0 +1,242 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-neon-indigo: var(--neon-indigo);
+  --color-neon-emerald: var(--neon-emerald);
+  --color-neon-blue: var(--neon-blue);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SFMono-Regular', monospace;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+
+  --color-finance: var(--accent-finance);
+  --color-water: var(--accent-water);
+  --color-gym: var(--accent-gym);
+  --color-nutrition: var(--accent-nutrition);
+  --color-tasks: var(--accent-tasks);
+  --color-hobbies: var(--accent-hobbies);
+}
+
+:root {
+  color-scheme: dark;
+  --radius: 0.875rem;
+
+  /* Off-black executive canvas — near-zero chroma */
+  --background: oklch(0.145 0.004 264);
+  --foreground: oklch(0.95 0.003 264);
+
+  --card: oklch(0.185 0.005 264);
+  --card-foreground: oklch(0.95 0.003 264);
+  --popover: oklch(0.185 0.005 264);
+  --popover-foreground: oklch(0.95 0.003 264);
+
+  /* Primary stays neutral (off-white) — accent color is reserved for module context */
+  --primary: oklch(0.95 0.003 264);
+  --primary-foreground: oklch(0.145 0.004 264);
+
+  --secondary: oklch(0.225 0.006 264);
+  --secondary-foreground: oklch(0.95 0.003 264);
+
+  --muted: oklch(0.21 0.005 264);
+  --muted-foreground: oklch(0.6 0.008 264);
+
+  --accent: oklch(0.78 0.07 156);
+  --accent-foreground: oklch(0.145 0.004 264);
+
+  --destructive: oklch(0.66 0.15 25);
+
+  --border: oklch(1 0 0 / 6%);
+  --input: oklch(1 0 0 / 10%);
+  --ring: oklch(0.72 0.09 265);
+
+  /* Per-module accents — same chroma/lightness family, hue is the only thing that varies */
+  --accent-finance: oklch(0.78 0.07 156);
+  --accent-water: oklch(0.8 0.055 224);
+  --accent-gym: oklch(0.74 0.09 55);
+  --accent-nutrition: oklch(0.73 0.08 30);
+  --accent-tasks: oklch(0.72 0.09 265);
+  --accent-hobbies: oklch(0.74 0.07 320);
+
+  /* Legacy names, retargeted to the premium palette so existing usages retint automatically */
+  --neon-indigo: var(--accent-tasks);
+  --neon-emerald: var(--accent-finance);
+  --neon-blue: var(--accent-water);
+
+  /* Chart palette */
+  --chart-1: var(--accent-tasks);
+  --chart-2: var(--accent-water);
+  --chart-3: var(--accent-finance);
+  --chart-4: var(--accent-gym);
+  --chart-5: var(--accent-nutrition);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply bg-background;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image: radial-gradient(70rem 50rem at 50% -20%, oklch(1 0 0 / 0.03), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  button,
+  [type='button'],
+  [type='submit'],
+  [type='reset'],
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [disabled] {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  .glass {
+    background: color-mix(in oklch, var(--card) 65%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+  }
+  .glow-indigo {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -16px var(--accent-tasks);
+  }
+  .glow-emerald {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -16px var(--accent-finance);
+  }
+  .glow-blue {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -16px var(--accent-water);
+  }
+  .glow-gym {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -16px var(--accent-gym);
+  }
+  .glow-nutrition {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -16px var(--accent-nutrition);
+  }
+  .glow-hobbies {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -16px var(--accent-hobbies);
+  }
+  .text-gradient {
+    background: linear-gradient(
+      100deg,
+      var(--neon-indigo),
+      var(--neon-blue) 55%,
+      var(--neon-emerald)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@keyframes xp-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.95);
+  }
+}
+.animate-xp-pop {
+  animation: xp-pop 1.6s ease-out forwards;
+}
+
+@keyframes level-up {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+.animate-level-up {
+  animation: level-up 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes burst {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--bx), var(--by)) scale(0.3);
+  }
+}
+.animate-burst {
+  animation: burst 0.7s ease-out forwards;
+}
+
+@keyframes water-wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-water-wave {
+  animation: water-wave 3.5s linear infinite;
+}
