@@ -1,25 +1,21 @@
 'use client'
 
-import { Loader2, Zap } from 'lucide-react'
 import { GameProvider, useGame } from '@/lib/game-context'
 import { AuthScreen } from '@/components/auth-screen'
 import { AppShell } from '@/components/app-shell'
 import { Toaster } from '@/components/ui/sonner'
 
+/**
+ * Renders AuthScreen immediately whenever there's no confirmed user yet —
+ * including while `authLoading` is still resolving — instead of a
+ * full-page spinner. A blocking spinner meant the server-rendered HTML
+ * (what a crawler or Google's OAuth verification check sees) never showed
+ * StarkLab's name/description, only an empty loading state. Firebase Auth's
+ * local persistence resolves fast, so a returning logged-in user sees at
+ * most a brief flash of AuthScreen before AppShell takes over.
+ */
 function Gate({ children }: { children: React.ReactNode }) {
-  const { user, authLoading } = useGame()
-
-  if (authLoading) {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-4">
-        <span className="grid size-12 place-items-center rounded-2xl bg-tasks/15">
-          <Zap className="size-6 text-tasks" aria-hidden="true" />
-        </span>
-        <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
-        <span className="sr-only">Cargando StarkLab</span>
-      </main>
-    )
-  }
+  const { user } = useGame()
 
   return user ? <AppShell>{children}</AppShell> : <AuthScreen />
 }
