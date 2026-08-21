@@ -2,13 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Bell, BellOff, BellRing, Mail, MailCheck, User } from 'lucide-react'
+import { Bell, BellOff, BellRing, Inbox, Mail, MailCheck, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useGame } from '@/lib/game-context'
 import { NOTIFICATION_PROMPT_DISMISSED_KEY } from '@/components/notification-prompt'
 import { scheduleLocalReminder } from '@/lib/local-reminders'
 import { registerPushToken } from '@/lib/push-notifications'
 import { connectGmail, disconnectGmail, fetchGmailSyncStatus, type GmailSyncStatus } from '@/lib/gmail-sync'
+import {
+  connectImap,
+  disconnectImap,
+  fetchImapSyncStatus,
+  IMAP_PROVIDER_PRESETS,
+  type ImapSyncStatus,
+} from '@/lib/imap-sync-client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 type PermissionState = 'unsupported' | 'default' | 'granted' | 'denied'
 
@@ -28,12 +38,21 @@ export function SettingsSection() {
   const [gmailStatus, setGmailStatus] = useState<GmailSyncStatus | null>(null)
   const [gmailBusy, setGmailBusy] = useState(false)
 
+  const [imapStatus, setImapStatus] = useState<ImapSyncStatus | null>(null)
+  const [imapBusy, setImapBusy] = useState(false)
+  const [imapForm, setImapForm] = useState({ email: '', host: '', port: '993', password: '' })
+  const [imapFormOpen, setImapFormOpen] = useState(false)
+
   useEffect(() => {
     setPermission(readPermission())
   }, [])
 
   useEffect(() => {
     if (user) fetchGmailSyncStatus(user.uid).then(setGmailStatus)
+  }, [user])
+
+  useEffect(() => {
+    if (user) fetchImapSyncStatus(user.uid).then(setImapStatus)
   }, [user])
 
   useEffect(() => {
@@ -68,6 +87,47 @@ export function SettingsSection() {
       toast.error('No se pudo desconectar Gmail.')
     } finally {
       setGmailBusy(false)
+    }
+  }
+
+  function applyImapPreset(host: string, port: number) {
+    setImapForm((f) => ({ ...f, host, port: String(port) }))
+  }
+
+  async function handleConnectImap() {
+    if (!imapForm.email || !imapForm.host || !imapForm.port || !imapForm.password) {
+      toast.error('Completá correo, servidor, puerto y contraseña.')
+      return
+    }
+    setImapBusy(true)
+    try {
+      await connectImap({
+        email: imapForm.email,
+        host: imapForm.host,
+        port: Number(imapForm.port),
+        password: imapForm.password,
+      })
+      toast.success('Correo conectado — el sync ya está activo.')
+      if (user) setImapStatus(await fetchImapSyncStatus(user.uid))
+      setImapForm({ email: '', host: '', port: '993', password: '' })
+      setImapFormOpen(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'No se pudo conectar.')
+    } finally {
+      setImapBusy(false)
+    }
+  }
+
+  async function handleDisconnectImap() {
+    setImapBusy(true)
+    try {
+      await disconnectImap()
+      setImapStatus({ connected: false, email: '' })
+      toast.success('Correo desconectado.')
+    } catch {
+      toast.error('No se pudo desconectar.')
+    } finally {
+      setImapBusy(false)
     }
   }
 
@@ -175,6 +235,123 @@ export function SettingsSection() {
               <Mail className="size-4" aria-hidden="true" />
               {gmailBusy ? 'Redirigiendo…' : 'Conectar Gmail'}
             </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-card p-5 sm:p-6">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-9 place-items-center rounded-xl bg-tasks/12">
+            <Inbox className="size-4.5 text-tasks" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-semibold tracking-tight">Correo general (IMAP)</h2>
+            <p className="text-sm text-muted-foreground">
+              Cualquier proveedor — Outlook, Yahoo, iCloud, u otra cuenta de Gmail
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
+          Alternativa a Gmail sin pantalla de consentimiento de Google: conectá cualquier correo con
+          una <strong className="text-foreground">contraseña de aplicación</strong> (se genera desde la
+          configuración de seguridad de tu proveedor, no es tu contraseña normal). Se guarda cifrada.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {imapStatus?.connected ? (
+            <>
+              <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-tasks/12 px-3 text-[13px] font-medium text-tasks">
+                <MailCheck className="size-4" aria-hidden="true" />
+                Conectado como {imapStatus.email}
+              </span>
+              <button
+                type="button"
+                onClick={handleDisconnectImap}
+                disabled={imapBusy}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-secondary px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-secondary/70 disabled:opacity-60"
+              >
+                {imapBusy ? 'Desconectando…' : 'Desconectar'}
+              </button>
+            </>
+          ) : !imapFormOpen ? (
+            <button
+              type="button"
+              onClick={() => setImapFormOpen(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-tasks px-4 text-[13px] font-medium text-primary-foreground transition-all hover:brightness-110 active:translate-y-px"
+            >
+              <Inbox className="size-4" aria-hidden="true" />
+              Conectar correo
+            </button>
+          ) : (
+            <div className="flex w-full flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
+                {IMAP_PROVIDER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => applyImapPreset(preset.host, preset.port)}
+                    className={`h-8 rounded-lg px-3 text-[12px] font-medium transition-colors ${
+                      imapForm.host === preset.host
+                        ? 'bg-tasks/15 text-tasks'
+                        : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <Label htmlFor="imap-email">Correo</Label>
+                  <Input
+                    id="imap-email"
+                    type="email"
+                    placeholder="tu@correo.com"
+                    value={imapForm.email}
+                    onChange={(e) => setImapForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="imap-host">Servidor IMAP</Label>
+                  <Input
+                    id="imap-host"
+                    placeholder="imap.ejemplo.com"
+                    value={imapForm.host}
+                    onChange={(e) => setImapForm((f) => ({ ...f, host: e.target.value }))}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="imap-port">Puerto</Label>
+                  <Input
+                    id="imap-port"
+                    type="number"
+                    value={imapForm.port}
+                    onChange={(e) => setImapForm((f) => ({ ...f, port: e.target.value }))}
+                  />
+                </div>
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <Label htmlFor="imap-password">Contraseña de aplicación</Label>
+                  <Input
+                    id="imap-password"
+                    type="password"
+                    placeholder="••••••••••••••••"
+                    value={imapForm.password}
+                    onChange={(e) => setImapForm((f) => ({ ...f, password: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleConnectImap} disabled={imapBusy} size="sm">
+                  {imapBusy ? 'Conectando…' : 'Conectar'}
+                </Button>
+                <Button onClick={() => setImapFormOpen(false)} disabled={imapBusy} size="sm" variant="outline">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       </section>

@@ -3,8 +3,19 @@
 Esto es la versión "cualquiera que se registre puede usarlo" del sync de
 correos de Banco Guayaquil. A diferencia de `apps-script/Code.gs` (que solo
 puede leer **tu** Gmail, porque corre como vos), acá cada usuario conecta
-**su propio** Gmail desde la app, y un cron gratis externo dispara la
+**su propio** correo desde la app, y un cron gratis externo dispara la
 sincronización de todos cada 5 minutos.
+
+Hay dos formas de conectar el correo, ambas alimentan el mismo pipeline:
+
+- **Gmail vía OAuth** (sección de abajo) — requiere el setup de Google Cloud
+  completo (OAuth client, verificación de marca, etc.).
+- **Cualquier proveedor vía IMAP + contraseña de aplicación** — Outlook,
+  Yahoo, iCloud, u otra cuenta de Gmail. Sin pantalla de consentimiento de
+  Google, sin proceso de verificación — el usuario genera una contraseña de
+  aplicación desde la configuración de seguridad de su propio proveedor y la
+  pega en Ajustes. Mucho menos fricción; es la opción recomendada salvo que
+  específicamente necesites la variante OAuth de Gmail.
 
 No usa Cloud Functions ni el plan Blaze de Firebase — todo corre como rutas
 normales de Next.js. El único costo real sería si algún día tenés muchísimos
@@ -121,6 +132,34 @@ Andá a **Ajustes** dentro de StarkLab → sección "Sync de Banco Guayaquil" �
 que estar en la lista de test users del paso 2, salvo que ya hayas pasado
 verificación). Una vez que aceptás, el sync queda activo — el cron lo va a
 procesar en su próxima corrida.
+
+## 9. Alternativa: correo general vía IMAP (sin Google)
+
+Si no querés lidiar con OAuth/verificación de Google, o tus usuarios usan
+otros proveedores, esta es la vía recomendada.
+
+1. En `.env.local` (y en las variables de entorno de tu hosting), agregá:
+   ```
+   IMAP_CREDENTIALS_ENCRYPTION_KEY=<string largo random, ej. openssl rand -hex 32>
+   ```
+2. Reiniciá/redesplegá.
+3. Cada usuario, desde **Ajustes → "Correo general (IMAP)" → Conectar
+   correo**, genera una **contraseña de aplicación** desde la configuración
+   de seguridad de su propio proveedor (no es su contraseña normal — la
+   mayoría de proveedores la piden si tenés verificación en dos pasos
+   activada, que hoy es casi siempre):
+   - **Gmail**: [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   - **Outlook/Hotmail**: [account.live.com/proofs/AppPassword](https://account.live.com/proofs/AppPassword)
+   - **Yahoo**: Configuración de la cuenta → Seguridad → Generar contraseña de app
+   - **iCloud**: [appleid.apple.com](https://appleid.apple.com) → Seguridad → Contraseñas específicas de apps
+4. Pega esa contraseña en el formulario de Ajustes (junto con su correo,
+   servidor IMAP y puerto — hay botones de acceso rápido para los
+   proveedores más comunes). La app prueba la conexión antes de guardar; si
+   las credenciales están mal, avisa al instante en vez de guardar algo roto.
+
+La contraseña se guarda cifrada (AES-256-GCM) en una colección de Firestore
+totalmente inaccesible desde cualquier cliente — solo el cron del servidor
+puede desencriptarla para conectarse.
 
 ## Convive con tu Apps Script actual
 

@@ -1,5 +1,8 @@
 import { createHash } from 'crypto'
+import { FieldValue } from 'firebase-admin/firestore'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/movement-categories'
+import { adminDb } from '@/lib/firebase-admin'
+import { sendPushToUser } from '@/lib/server/push'
 
 // Server-only. Ported from apps-script/Code.gs so the exact same detection
 // rules (which emails count as a real transaction, how they're categorized)
@@ -167,10 +170,98 @@ export async function categorizeWithGroq(
   }
 }
 
-/** Deterministic Firestore doc id from a Gmail message id — same scheme as rutaMovimiento_/safeId_ in Apps Script. */
-export function movementDocId(gmailMessageId: string): string {
-  const digest = createHash('sha256').update(gmailMessageId).digest('base64url')
+/** Deterministic Firestore doc id from a source-unique email id (Gmail message id, or an IMAP Message-ID header). */
+export function movementDocId(uniqueEmailId: string): string {
+  const digest = createHash('sha256').update(uniqueEmailId).digest('base64url')
   return 'bg_' + digest.slice(0, 36)
+}
+
+/**
+ * Sender + subject filter, source-agnostic — Gmail's own search query
+ * language already applies REMITENTES_TRANSACCIONALES/PATRONES_ASUNTO_TRANSACCION
+ * server-side (see buildGmailQuery), but IMAP has no equivalent rich query
+ * syntax, so IMAP candidates are filtered with this after a plain "unseen"
+ * fetch. Kept as one function so both paths apply the identical rule.
+ */
+export function matchesTransactionalPattern(fromAddress: string, subject: string): boolean {
+  const from = fromAddress.toLowerCase()
+  const fromMatches = REMITENTES_TRANSACCIONALES.some((r) => from.includes(r.toLowerCase()))
+  if (!fromMatches) return false
+
+  return PATRONES_ASUNTO_TRANSACCION.some((p) => subject.toLowerCase().startsWith(p.toLowerCase()))
+}
+
+export interface EmailCandidate {
+  /** Unique within its source — Gmail message id, or an IMAP Message-ID header. */
+  id: string
+  subject: string
+  bodyText: string
+  /** ISO date string (YYYY-MM-DD). */
+  date: string
+}
+
+export type ProcessOutcome = 'created' | 'duplicate' | 'skipped'
+
+/**
+ * The shared core of both sync paths (Gmail OAuth and IMAP): classify,
+ * dedupe, optionally categorize with Groq, save the movement, push-notify.
+ * Both app/api/cron/sync-gmail's Gmail loop and lib/server/imap-sync.ts's
+ * IMAP loop call this per-candidate so the actual movement-creation rules
+ * never diverge between sources.
+ */
+export async function processEmailCandidate(
+  uid: string,
+  candidate: EmailCandidate,
+  source: string,
+  groqApiKey: string | undefined,
+  groqModel: string,
+): Promise<ProcessOutcome> {
+  const fullText = `${candidate.subject}\n${candidate.bodyText}`
+
+  if (shouldSkipEmail(candidate.subject, fullText).skip) return 'skipped'
+
+  const datosBase = extraerDatosBancoNativo(fullText)
+  if (!datosBase) return 'skipped'
+
+  const db = adminDb()
+  const movementRef = db
+    .collection('users')
+    .doc(uid)
+    .collection('financeMovements')
+    .doc(movementDocId(candidate.id))
+
+  const existing = await movementRef.get()
+  if (existing.exists) return 'duplicate'
+
+  let category = datosBase.category
+  let description = datosBase.description
+  if (groqApiKey) {
+    const refined = await categorizeWithGroq(fullText, datosBase, groqApiKey, groqModel)
+    if (refined) {
+      category = refined.category
+      description = refined.description
+    }
+  }
+
+  await movementRef.set({
+    type: datosBase.type,
+    amount: datosBase.amount,
+    category,
+    description,
+    date: candidate.date,
+    createdAt: FieldValue.serverTimestamp(),
+    source,
+    automatic: true,
+  })
+
+  const sign = datosBase.type === 'income' ? '+' : '-'
+  await sendPushToUser(
+    uid,
+    datosBase.type === 'income' ? 'Nuevo ingreso' : 'Nuevo gasto',
+    `${sign}$${datosBase.amount} · ${description}`,
+  )
+
+  return 'created'
 }
 
 // ==================== Google OAuth + Gmail REST ====================

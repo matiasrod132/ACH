@@ -110,5 +110,15 @@ service cloud.firestore {
     match /gmailSyncTokens/{uid} {
       allow read, write: if false;
     }
+
+    // IMAP app-password credentials (provider-agnostic email sync — see
+    // app/api/imap/*, lib/server/imap-sync.ts). Same reasoning as
+    // gmailSyncTokens above: this is a standing account credential, so
+    // nothing from any client can ever read or write it — only the Admin
+    // SDK (which bypasses rules). Also encrypted at rest independently of
+    // this rule (see lib/server/crypto-secret.ts) as defense in depth.
+    match /imapCredentials/{uid} {
+      allow read, write: if false;
+    }
   }
 }
