@@ -40,8 +40,14 @@ export function SettingsSection() {
 
   const [imapStatus, setImapStatus] = useState<ImapSyncStatus | null>(null)
   const [imapBusy, setImapBusy] = useState(false)
-  const [imapForm, setImapForm] = useState({ email: '', host: '', port: '993', password: '' })
+  const [imapForm, setImapForm] = useState<{ email: string; host: string; port: string; password: string }>({
+    email: '',
+    host: IMAP_PROVIDER_PRESETS[0].host,
+    port: String(IMAP_PROVIDER_PRESETS[0].port),
+    password: '',
+  })
   const [imapFormOpen, setImapFormOpen] = useState(false)
+  const [imapAdvancedOpen, setImapAdvancedOpen] = useState(false)
 
   useEffect(() => {
     setPermission(readPermission())
@@ -109,8 +115,9 @@ export function SettingsSection() {
       })
       toast.success('Correo conectado — el sync ya está activo.')
       if (user) setImapStatus(await fetchImapSyncStatus(user.uid))
-      setImapForm({ email: '', host: '', port: '993', password: '' })
+      setImapForm({ email: '', host: IMAP_PROVIDER_PRESETS[0].host, port: String(IMAP_PROVIDER_PRESETS[0].port), password: '' })
       setImapFormOpen(false)
+      setImapAdvancedOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'No se pudo conectar.')
     } finally {
@@ -285,25 +292,42 @@ export function SettingsSection() {
             </button>
           ) : (
             <div className="flex w-full flex-col gap-3">
-              <div className="flex flex-wrap gap-2">
-                {IMAP_PROVIDER_PRESETS.map((preset) => (
+              <div>
+                <Label className="mb-1.5 block">Proveedor</Label>
+                <div className="flex flex-wrap gap-2">
+                  {IMAP_PROVIDER_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        applyImapPreset(preset.host, preset.port)
+                        setImapAdvancedOpen(false)
+                      }}
+                      className={`h-8 rounded-lg px-3 text-[12px] font-medium transition-colors ${
+                        imapForm.host === preset.host && !imapAdvancedOpen
+                          ? 'bg-tasks/15 text-tasks'
+                          : 'bg-secondary text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                   <button
-                    key={preset.label}
                     type="button"
-                    onClick={() => applyImapPreset(preset.host, preset.port)}
+                    onClick={() => setImapAdvancedOpen(true)}
                     className={`h-8 rounded-lg px-3 text-[12px] font-medium transition-colors ${
-                      imapForm.host === preset.host
+                      imapAdvancedOpen
                         ? 'bg-tasks/15 text-tasks'
                         : 'bg-secondary text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {preset.label}
+                    Otro proveedor
                   </button>
-                ))}
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 flex flex-col gap-1.5">
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="imap-email">Correo</Label>
                   <Input
                     id="imap-email"
@@ -314,24 +338,6 @@ export function SettingsSection() {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="imap-host">Servidor IMAP</Label>
-                  <Input
-                    id="imap-host"
-                    placeholder="imap.ejemplo.com"
-                    value={imapForm.host}
-                    onChange={(e) => setImapForm((f) => ({ ...f, host: e.target.value }))}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="imap-port">Puerto</Label>
-                  <Input
-                    id="imap-port"
-                    type="number"
-                    value={imapForm.port}
-                    onChange={(e) => setImapForm((f) => ({ ...f, port: e.target.value }))}
-                  />
-                </div>
-                <div className="col-span-2 flex flex-col gap-1.5">
                   <Label htmlFor="imap-password">Contraseña de aplicación</Label>
                   <Input
                     id="imap-password"
@@ -340,7 +346,34 @@ export function SettingsSection() {
                     value={imapForm.password}
                     onChange={(e) => setImapForm((f) => ({ ...f, password: e.target.value }))}
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    No es tu contraseña normal — se genera aparte, en la configuración de seguridad de tu
+                    proveedor.
+                  </p>
                 </div>
+
+                {imapAdvancedOpen && (
+                  <div className="grid grid-cols-2 gap-3 rounded-xl bg-secondary/40 p-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="imap-host">Servidor IMAP</Label>
+                      <Input
+                        id="imap-host"
+                        placeholder="imap.ejemplo.com"
+                        value={imapForm.host}
+                        onChange={(e) => setImapForm((f) => ({ ...f, host: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="imap-port">Puerto</Label>
+                      <Input
+                        id="imap-port"
+                        type="number"
+                        value={imapForm.port}
+                        onChange={(e) => setImapForm((f) => ({ ...f, port: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-2">
