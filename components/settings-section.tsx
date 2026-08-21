@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Bell, BellOff, BellRing, Inbox, Mail, MailCheck, User } from 'lucide-react'
+import { Bell, BellOff, BellRing, Building2, Inbox, Mail, MailCheck, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useGame } from '@/lib/game-context'
 import { NOTIFICATION_PROMPT_DISMISSED_KEY } from '@/components/notification-prompt'
@@ -16,6 +16,8 @@ import {
   IMAP_PROVIDER_PRESETS,
   type ImapSyncStatus,
 } from '@/lib/imap-sync-client'
+import { BANK_PROFILES, DEFAULT_BANK_SELECTION, resolveBankProfile, type UserBankSelection } from '@/lib/bank-profiles'
+import { fetchBankSelection, saveBankSelection } from '@/lib/bank-selection-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,9 +51,23 @@ export function SettingsSection() {
   const [imapFormOpen, setImapFormOpen] = useState(false)
   const [imapAdvancedOpen, setImapAdvancedOpen] = useState(false)
 
+  const [bankSelection, setBankSelection] = useState<UserBankSelection>(DEFAULT_BANK_SELECTION)
+  const [customSenders, setCustomSenders] = useState('')
+  const [customSubjects, setCustomSubjects] = useState('')
+  const [bankSaving, setBankSaving] = useState(false)
+
   useEffect(() => {
     setPermission(readPermission())
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    fetchBankSelection(user.uid).then((selection) => {
+      setBankSelection(selection)
+      setCustomSenders(selection.custom?.senderAddresses?.join(', ') ?? '')
+      setCustomSubjects(selection.custom?.subjectPatterns?.join(', ') ?? '')
+    })
+  }, [user])
 
   useEffect(() => {
     if (user) fetchGmailSyncStatus(user.uid).then(setGmailStatus)
@@ -93,6 +109,42 @@ export function SettingsSection() {
       toast.error('No se pudo desconectar Gmail.')
     } finally {
       setGmailBusy(false)
+    }
+  }
+
+  async function handleSelectBank(bankId: string) {
+    if (!user) return
+    const next: UserBankSelection = bankId === 'custom' ? { bankId: 'custom', custom: bankSelection.custom } : { bankId }
+    setBankSelection(next)
+    setBankSaving(true)
+    try {
+      await saveBankSelection(user.uid, next)
+      if (bankId !== 'custom') toast.success('Banco actualizado.')
+    } catch {
+      toast.error('No se pudo guardar el banco.')
+    } finally {
+      setBankSaving(false)
+    }
+  }
+
+  async function handleSaveCustomBank() {
+    if (!user) return
+    const senderAddresses = customSenders.split(',').map((s) => s.trim()).filter(Boolean)
+    const subjectPatterns = customSubjects.split(',').map((s) => s.trim()).filter(Boolean)
+    if (senderAddresses.length === 0 || subjectPatterns.length === 0) {
+      toast.error('Completá al menos un remitente y un patrón de asunto.')
+      return
+    }
+    const next: UserBankSelection = { bankId: 'custom', custom: { senderAddresses, subjectPatterns } }
+    setBankSaving(true)
+    try {
+      await saveBankSelection(user.uid, next)
+      setBankSelection(next)
+      toast.success('Banco personalizado guardado.')
+    } catch {
+      toast.error('No se pudo guardar.')
+    } finally {
+      setBankSaving(false)
     }
   }
 
@@ -167,6 +219,8 @@ export function SettingsSection() {
     setTimeout(() => setTestSent(false), 3000)
   }
 
+  const bankName = resolveBankProfile(bankSelection).name
+
   return (
     <div className="flex flex-col gap-5">
       <section className="rounded-2xl bg-card p-5 sm:p-6">
@@ -195,6 +249,78 @@ export function SettingsSection() {
 
       <section className="rounded-2xl bg-card p-5 sm:p-6">
         <div className="flex items-center gap-2.5">
+          <span className="grid size-9 place-items-center rounded-xl bg-nutrition/12">
+            <Building2 className="size-4.5 text-nutrition" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-semibold tracking-tight">Tu banco</h2>
+            <p className="text-sm text-muted-foreground">Qué correos de banco buscar al sincronizar</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {BANK_PROFILES.map((bank) => (
+            <button
+              key={bank.id}
+              type="button"
+              onClick={() => handleSelectBank(bank.id)}
+              disabled={bankSaving}
+              className={`h-9 rounded-lg px-3.5 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+                bankSelection.bankId === bank.id
+                  ? 'bg-nutrition/15 text-nutrition'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {bank.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => handleSelectBank('custom')}
+            disabled={bankSaving}
+            className={`h-9 rounded-lg px-3.5 text-[13px] font-medium transition-colors disabled:opacity-60 ${
+              bankSelection.bankId === 'custom'
+                ? 'bg-nutrition/15 text-nutrition'
+                : 'bg-secondary text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Otro banco
+          </button>
+        </div>
+
+        {bankSelection.bankId === 'custom' && (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl bg-secondary/40 p-3.5">
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              Poné el correo remitente exacto de las notificaciones de tu banco, y una o más palabras con
+              las que siempre empieza el asunto (ej. &quot;Consumo por&quot;). Separá varios con comas.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="bank-senders">Remitente(s)</Label>
+              <Input
+                id="bank-senders"
+                placeholder="notificaciones@tubanco.com"
+                value={customSenders}
+                onChange={(e) => setCustomSenders(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="bank-subjects">Inicio del asunto</Label>
+              <Input
+                id="bank-subjects"
+                placeholder="Consumo por, Notificación de"
+                value={customSubjects}
+                onChange={(e) => setCustomSubjects(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleSaveCustomBank} disabled={bankSaving} size="sm" className="w-fit">
+              {bankSaving ? 'Guardando…' : 'Guardar banco'}
+            </Button>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl bg-card p-5 sm:p-6">
+        <div className="flex items-center gap-2.5">
           <span className="grid size-9 place-items-center rounded-xl bg-finance/12">
             {gmailStatus?.connected ? (
               <MailCheck className="size-4.5 text-finance" aria-hidden="true" />
@@ -203,7 +329,7 @@ export function SettingsSection() {
             )}
           </span>
           <div>
-            <h2 className="font-display text-lg font-semibold tracking-tight">Sync de Banco Guayaquil</h2>
+            <h2 className="font-display text-lg font-semibold tracking-tight">Sync con Gmail</h2>
             <p className="text-sm text-muted-foreground">
               Conectá tu Gmail para registrar movimientos automáticamente
             </p>
@@ -211,9 +337,8 @@ export function SettingsSection() {
         </div>
 
         <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
-          Detecta los correos de consumo/orden de Banco Guayaquil y crea el movimiento por vos, sin que
-          tengas la app abierta. Solo lee esos correos puntuales para detectar montos — nunca accede al
-          resto de tu bandeja.
+          Detecta los correos de {bankName} y crea el movimiento por vos, sin que tengas la app abierta.
+          Solo lee esos correos puntuales para detectar montos — nunca accede al resto de tu bandeja.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">

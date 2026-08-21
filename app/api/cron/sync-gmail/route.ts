@@ -11,6 +11,7 @@ import {
 } from '@/lib/server/bank-sync'
 import { syncImapUser, type ImapCredentials } from '@/lib/server/imap-sync'
 import { decryptSecret } from '@/lib/server/crypto-secret'
+import { resolveBankProfile, type UserBankSelection, type BankProfile } from '@/lib/bank-profiles'
 
 /**
  * Multi-user replacement for apps-script/Code.gs's procesarMailsBancoGuayaquil —
@@ -53,7 +54,13 @@ interface UserSyncResult {
   errors: number
 }
 
-async function syncGmailUser(uid: string, email: string, groqApiKey: string | undefined, groqModel: string): Promise<UserSyncResult> {
+async function syncGmailUser(
+  uid: string,
+  email: string,
+  bankProfile: BankProfile,
+  groqApiKey: string | undefined,
+  groqModel: string,
+): Promise<UserSyncResult> {
   const result: UserSyncResult = { uid, email, source: 'gmail', created: 0, duplicates: 0, skipped: 0, errors: 0 }
   const db = adminDb()
 
@@ -67,7 +74,7 @@ async function syncGmailUser(uid: string, email: string, groqApiKey: string | un
     return result
   }
 
-  const messageIds = await gmailListMessageIds(accessToken, buildGmailQuery('is:unread newer_than:30d'))
+  const messageIds = await gmailListMessageIds(accessToken, buildGmailQuery(bankProfile, 'is:unread newer_than:30d'))
 
   for (const messageId of messageIds) {
     try {
@@ -103,6 +110,7 @@ async function syncGmailUser(uid: string, email: string, groqApiKey: string | un
 async function syncImapConnectedUser(
   uid: string,
   email: string,
+  bankProfile: BankProfile,
   groqApiKey: string | undefined,
   groqModel: string,
 ): Promise<UserSyncResult> {
@@ -120,7 +128,7 @@ async function syncImapConnectedUser(
       email: data.email,
       password: decryptSecret({ encrypted: data.encrypted, iv: data.iv, authTag: data.authTag }),
     }
-    const imapResult = await syncImapUser(uid, creds, groqApiKey, groqModel)
+    const imapResult = await syncImapUser(uid, creds, bankProfile, groqApiKey, groqModel)
     result.created = imapResult.created
     result.duplicates = imapResult.duplicates
     result.skipped = imapResult.skipped
@@ -146,9 +154,11 @@ export async function GET(request: Request) {
 
   const gmailUsers = await db.collection('users').where('gmailSync.connected', '==', true).get()
   for (const userDoc of gmailUsers.docs) {
-    const email = (userDoc.data().gmailSync?.email as string) ?? ''
+    const data = userDoc.data()
+    const email = (data.gmailSync?.email as string) ?? ''
+    const bankProfile = resolveBankProfile(data.bankSelection as UserBankSelection | undefined)
     try {
-      results.push(await syncGmailUser(userDoc.id, email, groqApiKey, groqModel))
+      results.push(await syncGmailUser(userDoc.id, email, bankProfile, groqApiKey, groqModel))
     } catch (err) {
       console.error(`[sync-gmail] Error con el usuario ${userDoc.id}:`, err)
       results.push({ uid: userDoc.id, email, source: 'gmail', created: 0, duplicates: 0, skipped: 0, errors: 1 })
@@ -157,9 +167,11 @@ export async function GET(request: Request) {
 
   const imapUsers = await db.collection('users').where('imapSync.connected', '==', true).get()
   for (const userDoc of imapUsers.docs) {
-    const email = (userDoc.data().imapSync?.email as string) ?? ''
+    const data = userDoc.data()
+    const email = (data.imapSync?.email as string) ?? ''
+    const bankProfile = resolveBankProfile(data.bankSelection as UserBankSelection | undefined)
     try {
-      results.push(await syncImapConnectedUser(userDoc.id, email, groqApiKey, groqModel))
+      results.push(await syncImapConnectedUser(userDoc.id, email, bankProfile, groqApiKey, groqModel))
     } catch (err) {
       console.error(`[sync-gmail] Error IMAP con el usuario ${userDoc.id}:`, err)
       results.push({ uid: userDoc.id, email, source: 'imap', created: 0, duplicates: 0, skipped: 0, errors: 1 })

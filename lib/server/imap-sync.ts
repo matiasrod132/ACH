@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { matchesTransactionalPattern, processEmailCandidate, type ProcessOutcome } from '@/lib/server/bank-sync'
+import type { BankProfile } from '@/lib/bank-profiles'
 
 // Provider-agnostic email sync via plain IMAP + an app password — the
 // alternative to the Gmail-specific OAuth path (lib/server/bank-sync.ts's
@@ -59,6 +60,7 @@ export interface ImapSyncResult {
 export async function syncImapUser(
   uid: string,
   creds: ImapCredentials,
+  bankProfile: BankProfile,
   groqApiKey: string | undefined,
   groqModel: string,
 ): Promise<ImapSyncResult> {
@@ -75,7 +77,7 @@ export async function syncImapUser(
       for await (const msg of client.fetch({ seen: false }, { envelope: true, uid: true })) {
         const from = msg.envelope?.from?.[0]?.address ?? ''
         const subject = msg.envelope?.subject ?? ''
-        if (matchesTransactionalPattern(from, subject)) {
+        if (matchesTransactionalPattern(bankProfile, from, subject)) {
           matches.push({ uid: msg.uid, messageId: msg.envelope?.messageId || `imap-${creds.email}-${msg.uid}`, subject })
         }
       }

@@ -3,6 +3,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/movement-categories'
 import { adminDb } from '@/lib/firebase-admin'
 import { sendPushToUser } from '@/lib/server/push'
+import type { BankProfile } from '@/lib/bank-profiles'
 
 // Server-only. Ported from apps-script/Code.gs so the exact same detection
 // rules (which emails count as a real transaction, how they're categorized)
@@ -10,13 +11,10 @@ import { sendPushToUser } from '@/lib/server/push'
 // original path) or the multi-user OAuth + cron sync below. Keep both in
 // sync if the rules ever change — see apps-script/Code.gs's own comments
 // for the reasoning behind each pattern.
-
-export const REMITENTES_TRANSACCIONALES = [
-  'BancoGuayaquil@bancoguayaquil.com',
-  'bancavirtual@bancoguayaquil.com',
-]
-
-export const PATRONES_ASUNTO_TRANSACCION = ['Consumo por', 'Orden de']
+//
+// Sender/subject patterns are now per-bank (see lib/bank-profiles.ts) rather
+// than hardcoded to Banco Guayaquil — each user picks their bank (or
+// supplies their own bank's real sender/subject) in Ajustes.
 
 const FRASES_TRANSACCION_NO_EFECTIVA = [
   'rechazad',
@@ -39,9 +37,9 @@ const FRASES_TRANSACCION_NO_EFECTIVA = [
 ]
 
 /** Gmail search query — sender AND subject-pattern filters combined, same as busquedaGmailTransaccional_ in Apps Script. */
-export function buildGmailQuery(extra?: string): string {
-  const remitentes = `from:(${REMITENTES_TRANSACCIONALES.join(' OR ')})`
-  const asuntos = `subject:(${PATRONES_ASUNTO_TRANSACCION.map((p) => `"${p}"`).join(' OR ')})`
+export function buildGmailQuery(profile: BankProfile, extra?: string): string {
+  const remitentes = `from:(${profile.senderAddresses.join(' OR ')})`
+  const asuntos = `subject:(${profile.subjectPatterns.map((p) => `"${p}"`).join(' OR ')})`
   return `${remitentes} ${asuntos}${extra ? ' ' + extra : ''}`
 }
 
@@ -183,12 +181,14 @@ export function movementDocId(uniqueEmailId: string): string {
  * syntax, so IMAP candidates are filtered with this after a plain "unseen"
  * fetch. Kept as one function so both paths apply the identical rule.
  */
-export function matchesTransactionalPattern(fromAddress: string, subject: string): boolean {
+export function matchesTransactionalPattern(profile: BankProfile, fromAddress: string, subject: string): boolean {
+  if (profile.senderAddresses.length === 0 || profile.subjectPatterns.length === 0) return false
+
   const from = fromAddress.toLowerCase()
-  const fromMatches = REMITENTES_TRANSACCIONALES.some((r) => from.includes(r.toLowerCase()))
+  const fromMatches = profile.senderAddresses.some((r) => from.includes(r.toLowerCase()))
   if (!fromMatches) return false
 
-  return PATRONES_ASUNTO_TRANSACCION.some((p) => subject.toLowerCase().startsWith(p.toLowerCase()))
+  return profile.subjectPatterns.some((p) => subject.toLowerCase().startsWith(p.toLowerCase()))
 }
 
 export interface EmailCandidate {
