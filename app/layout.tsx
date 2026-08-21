@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'StarkLab',
   },
+  verification: {
+    google: '1YeGhEuiB9OdYOMFJKk8WAcZNILQ-ViCdCejxG7GGBQ',
+  },
 }
 
 export const viewport: Viewport = {
