@@ -34,8 +34,12 @@ export function AuthScreen() {
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       <div className="grid w-full max-w-5xl items-center gap-10 lg:grid-cols-2">
-        {/* Brand / pitch side */}
-        <section className="hidden flex-col gap-8 lg:flex">
+        {/* Brand / pitch side — always visible (not just on desktop): this is
+            the app's name + purpose statement, and hiding it below the `lg`
+            breakpoint meant a mobile-width render (including automated
+            checks like Google's OAuth brand verification) saw only the logo
+            with no description at all. */}
+        <section className="flex flex-col gap-6 lg:gap-8">
           <div className="flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-xl bg-neon-indigo/15">
               <Zap className="size-6 text-neon-indigo" aria-hidden="true" />
@@ -44,7 +48,7 @@ export function AuthScreen() {
           </div>
 
           <div className="space-y-4">
-            <h1 className="font-display text-5xl font-bold leading-[1.05] tracking-tight text-balance">
+            <h1 className="font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance sm:text-4xl lg:text-5xl lg:leading-[1.05]">
               Convierte tus hábitos en <span className="text-gradient">un juego que ganas</span>.
             </h1>
             <p className="max-w-md text-pretty text-base leading-relaxed text-muted-foreground">
@@ -62,13 +66,6 @@ export function AuthScreen() {
 
         {/* Form side */}
         <section className="glass glow-indigo mx-auto w-full max-w-md rounded-3xl p-7 sm:p-9">
-          <div className="mb-7 flex items-center gap-3 lg:hidden">
-            <span className="grid size-10 place-items-center rounded-xl bg-neon-indigo/15">
-              <Zap className="size-5 text-neon-indigo" aria-hidden="true" />
-            </span>
-            <span className="font-display text-lg font-semibold tracking-tight">StarkLab</span>
-          </div>
-
           <div className="mb-6 flex items-center gap-1 rounded-xl bg-secondary/60 p-1">
             <TabButton active={mode === 'login'} onClick={() => setMode('login')}>
               Iniciar sesión
