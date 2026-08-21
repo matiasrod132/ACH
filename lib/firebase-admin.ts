@@ -1,7 +1,10 @@
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
 import { getMessaging } from 'firebase-admin/messaging'
+
+// Deliberately never imports firebase-admin/auth — see
+// lib/server/verify-firebase-token.ts for why (its jwks-rsa dependency
+// breaks with ERR_REQUIRE_ESM on Netlify/Vercel serverless functions).
 
 // Server-only. Never import this from a 'use client' component — it needs a
 // service account private key that must never reach the browser bundle.
@@ -34,10 +37,6 @@ function adminApp(): App {
 
 export function adminDb() {
   return getFirestore(adminApp())
-}
-
-export function adminAuth() {
-  return getAuth(adminApp())
 }
 
 export function adminMessaging() {

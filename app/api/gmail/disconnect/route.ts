@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
-import { adminAuth, adminDb } from '@/lib/firebase-admin'
+import { adminDb } from '@/lib/firebase-admin'
+import { verifyFirebaseIdToken } from '@/lib/server/verify-firebase-token'
 
 export async function POST(request: Request) {
   const { idToken } = (await request.json().catch(() => ({}))) as { idToken?: string }
   if (!idToken) return NextResponse.json({ error: 'Falta idToken.' }, { status: 400 })
 
-  let uid: string
-  try {
-    uid = (await adminAuth().verifyIdToken(idToken)).uid
-  } catch {
+  const verified = await verifyFirebaseIdToken(idToken)
+  if (!verified) {
     return NextResponse.json({ error: 'Sesión inválida o expirada.' }, { status: 401 })
   }
+  const uid = verified.uid
 
   const db = adminDb()
   const tokenDoc = await db.collection('gmailSyncTokens').doc(uid).get()

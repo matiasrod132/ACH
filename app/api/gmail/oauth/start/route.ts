@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { adminAuth } from '@/lib/firebase-admin'
+import { verifyFirebaseIdToken } from '@/lib/server/verify-firebase-token'
 import { signState } from '@/lib/server/oauth-state'
 
 /**
@@ -20,13 +20,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Falta idToken.' }, { status: 400 })
   }
 
-  let uid: string
-  try {
-    const decoded = await adminAuth().verifyIdToken(idToken)
-    uid = decoded.uid
-  } catch {
+  const verified = await verifyFirebaseIdToken(idToken)
+  if (!verified) {
     return NextResponse.json({ error: 'Sesión inválida o expirada.' }, { status: 401 })
   }
+  const uid = verified.uid
 
   const redirectUri = `${origin}/api/gmail/oauth/callback`
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
