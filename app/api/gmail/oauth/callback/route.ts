@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { adminDb } from '@/lib/firebase-admin'
 import { verifyState } from '@/lib/server/oauth-state'
+import { getAppOrigin } from '@/lib/server/app-url'
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
-  const settingsUrl = new URL('/ajustes', origin)
+  const { searchParams } = new URL(request.url)
+  const appOrigin = getAppOrigin(request)
+  const settingsUrl = new URL('/ajustes', appOrigin)
 
   const error = searchParams.get('error')
   if (error) {
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const redirectUri = `${origin}/api/gmail/oauth/callback`
+    const redirectUri = `${appOrigin}/api/gmail/oauth/callback`
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

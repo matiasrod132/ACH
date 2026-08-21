@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyFirebaseIdToken } from '@/lib/server/verify-firebase-token'
 import { signState } from '@/lib/server/oauth-state'
+import { getAppOrigin } from '@/lib/server/app-url'
 
 /**
  * Kicks off the "Conectar tu Gmail" flow: verifies the caller's Firebase ID
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'GOOGLE_OAUTH_CLIENT_ID no configurado.' }, { status: 500 })
   }
 
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const idToken = searchParams.get('idToken')
   if (!idToken) {
     return NextResponse.json({ error: 'Falta idToken.' }, { status: 400 })
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   }
   const uid = verified.uid
 
-  const redirectUri = `${origin}/api/gmail/oauth/callback`
+  const redirectUri = `${getAppOrigin(request)}/api/gmail/oauth/callback`
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('redirect_uri', redirectUri)
