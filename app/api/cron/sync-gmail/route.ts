@@ -12,6 +12,7 @@ import {
 import { syncImapUser, type ImapCredentials } from '@/lib/server/imap-sync'
 import { decryptSecret } from '@/lib/server/crypto-secret'
 import { resolveBankProfile, type UserBankSelection, type BankProfile } from '@/lib/bank-profiles'
+import { microsoftListCandidates, microsoftMarkRead, refreshMicrosoftAccessToken } from '@/lib/server/microsoft-sync'
 
 /**
  * Multi-user replacement for apps-script/Code.gs's procesarMailsBancoGuayaquil —
@@ -47,7 +48,7 @@ function isAuthorized(request: Request): boolean {
 interface UserSyncResult {
   uid: string
   email: string
-  source: 'gmail' | 'imap'
+  source: 'gmail' | 'imap' | 'microsoft'
   created: number
   duplicates: number
   skipped: number
@@ -141,6 +142,56 @@ async function syncImapConnectedUser(
   return result
 }
 
+async function syncMicrosoftUser(
+  uid: string,
+  email: string,
+  bankProfile: BankProfile,
+  groqApiKey: string | undefined,
+  groqModel: string,
+): Promise<UserSyncResult> {
+  const result: UserSyncResult = { uid, email, source: 'microsoft', created: 0, duplicates: 0, skipped: 0, errors: 0 }
+  const db = adminDb()
+
+  const tokenDoc = await db.collection('microsoftSyncTokens').doc(uid).get()
+  const storedRefreshToken = tokenDoc.data()?.refreshToken as string | undefined
+  if (!storedRefreshToken) return result
+
+  const tokens = await refreshMicrosoftAccessToken(storedRefreshToken)
+  if (!tokens) {
+    result.errors++
+    return result
+  }
+  // Microsoft rotates refresh tokens — persist the new one or the next run's refresh will fail.
+  if (tokens.refreshToken !== storedRefreshToken) {
+    await db.collection('microsoftSyncTokens').doc(uid).update({ refreshToken: tokens.refreshToken })
+  }
+
+  const candidates = await microsoftListCandidates(tokens.accessToken, bankProfile)
+
+  for (const candidate of candidates) {
+    try {
+      const outcome: ProcessOutcome = await processEmailCandidate(
+        uid,
+        candidate,
+        'microsoft_oauth_sync',
+        groqApiKey,
+        groqModel,
+      )
+
+      if (outcome === 'created') result.created++
+      else if (outcome === 'duplicate') result.duplicates++
+      else result.skipped++
+
+      await microsoftMarkRead(tokens.accessToken, candidate.id)
+    } catch (err) {
+      console.error(`[sync-gmail] Error procesando mensaje ${candidate.id} (Microsoft) para ${uid}:`, err)
+      result.errors++
+    }
+  }
+
+  return result
+}
+
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
@@ -175,6 +226,19 @@ export async function GET(request: Request) {
     } catch (err) {
       console.error(`[sync-gmail] Error IMAP con el usuario ${userDoc.id}:`, err)
       results.push({ uid: userDoc.id, email, source: 'imap', created: 0, duplicates: 0, skipped: 0, errors: 1 })
+    }
+  }
+
+  const microsoftUsers = await db.collection('users').where('microsoftSync.connected', '==', true).get()
+  for (const userDoc of microsoftUsers.docs) {
+    const data = userDoc.data()
+    const email = (data.microsoftSync?.email as string) ?? ''
+    const bankProfile = resolveBankProfile(data.bankSelection as UserBankSelection | undefined)
+    try {
+      results.push(await syncMicrosoftUser(userDoc.id, email, bankProfile, groqApiKey, groqModel))
+    } catch (err) {
+      console.error(`[sync-gmail] Error Microsoft con el usuario ${userDoc.id}:`, err)
+      results.push({ uid: userDoc.id, email, source: 'microsoft', created: 0, duplicates: 0, skipped: 0, errors: 1 })
     }
   }
 

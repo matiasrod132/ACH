@@ -120,5 +120,12 @@ service cloud.firestore {
     match /imapCredentials/{uid} {
       allow read, write: if false;
     }
+
+    // Microsoft OAuth refresh tokens (app/api/microsoft/oauth/*) — same
+    // reasoning as gmailSyncTokens: a standing credential, no client access
+    // ever, only the Admin SDK (which bypasses rules) touches it.
+    match /microsoftSyncTokens/{uid} {
+      allow read, write: if false;
+    }
   }
 }

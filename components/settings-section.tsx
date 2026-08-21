@@ -10,6 +10,12 @@ import { scheduleLocalReminder } from '@/lib/local-reminders'
 import { registerPushToken } from '@/lib/push-notifications'
 import { connectGmail, disconnectGmail, fetchGmailSyncStatus, type GmailSyncStatus } from '@/lib/gmail-sync'
 import {
+  connectMicrosoft,
+  disconnectMicrosoft,
+  fetchMicrosoftSyncStatus,
+  type MicrosoftSyncStatus,
+} from '@/lib/microsoft-sync-client'
+import {
   connectImap,
   disconnectImap,
   fetchImapSyncStatus,
@@ -39,6 +45,9 @@ export function SettingsSection() {
 
   const [gmailStatus, setGmailStatus] = useState<GmailSyncStatus | null>(null)
   const [gmailBusy, setGmailBusy] = useState(false)
+
+  const [microsoftStatus, setMicrosoftStatus] = useState<MicrosoftSyncStatus | null>(null)
+  const [microsoftBusy, setMicrosoftBusy] = useState(false)
 
   const [imapStatus, setImapStatus] = useState<ImapSyncStatus | null>(null)
   const [imapBusy, setImapBusy] = useState(false)
@@ -74,6 +83,10 @@ export function SettingsSection() {
   }, [user])
 
   useEffect(() => {
+    if (user) fetchMicrosoftSyncStatus(user.uid).then(setMicrosoftStatus)
+  }, [user])
+
+  useEffect(() => {
     if (user) fetchImapSyncStatus(user.uid).then(setImapStatus)
   }, [user])
 
@@ -87,6 +100,16 @@ export function SettingsSection() {
     } else if (gmailResult === 'error') {
       toast.error('No se pudo conectar Gmail — intentá de nuevo.')
     }
+
+    const microsoftResult = searchParams.get('microsoft')
+    if (microsoftResult === 'connected') {
+      toast.success('Microsoft conectado — el sync de movimientos ya está activo.')
+      if (user) fetchMicrosoftSyncStatus(user.uid).then(setMicrosoftStatus)
+    } else if (microsoftResult === 'denied') {
+      toast.error('Cancelaste la conexión con Microsoft.')
+    } else if (microsoftResult === 'error') {
+      toast.error('No se pudo conectar Microsoft — intentá de nuevo.')
+    }
   }, [searchParams, user])
 
   async function handleConnectGmail() {
@@ -96,6 +119,29 @@ export function SettingsSection() {
     } catch {
       toast.error('No se pudo iniciar la conexión con Gmail.')
       setGmailBusy(false)
+    }
+  }
+
+  async function handleConnectMicrosoft() {
+    setMicrosoftBusy(true)
+    try {
+      await connectMicrosoft()
+    } catch {
+      toast.error('No se pudo iniciar la conexión con Microsoft.')
+      setMicrosoftBusy(false)
+    }
+  }
+
+  async function handleDisconnectMicrosoft() {
+    setMicrosoftBusy(true)
+    try {
+      await disconnectMicrosoft()
+      setMicrosoftStatus({ connected: false, email: '' })
+      toast.success('Microsoft desconectado.')
+    } catch {
+      toast.error('No se pudo desconectar Microsoft.')
+    } finally {
+      setMicrosoftBusy(false)
     }
   }
 
@@ -366,6 +412,56 @@ export function SettingsSection() {
             >
               <Mail className="size-4" aria-hidden="true" />
               {gmailBusy ? 'Redirigiendo…' : 'Conectar Gmail'}
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-card p-5 sm:p-6">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-9 place-items-center rounded-xl bg-water/12">
+            {microsoftStatus?.connected ? (
+              <MailCheck className="size-4.5 text-water" aria-hidden="true" />
+            ) : (
+              <Mail className="size-4.5 text-water" aria-hidden="true" />
+            )}
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-semibold tracking-tight">Sync con Microsoft</h2>
+            <p className="text-sm text-muted-foreground">Outlook, Hotmail o Live conectado por OAuth</p>
+          </div>
+        </div>
+
+        <p className="mt-4 text-[13px] leading-relaxed text-muted-foreground">
+          Detecta los correos de {bankName} en tu cuenta de Microsoft y crea el movimiento por vos. Solo
+          lee esos correos puntuales — nunca accede al resto de tu bandeja.
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {microsoftStatus?.connected ? (
+            <>
+              <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-water/12 px-3 text-[13px] font-medium text-water">
+                <MailCheck className="size-4" aria-hidden="true" />
+                Conectado como {microsoftStatus.email}
+              </span>
+              <button
+                type="button"
+                onClick={handleDisconnectMicrosoft}
+                disabled={microsoftBusy}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-secondary px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-secondary/70 disabled:opacity-60"
+              >
+                {microsoftBusy ? 'Desconectando…' : 'Desconectar'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={handleConnectMicrosoft}
+              disabled={microsoftBusy}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-water px-4 text-[13px] font-medium text-primary-foreground transition-all hover:brightness-110 active:translate-y-px disabled:opacity-60"
+            >
+              <Mail className="size-4" aria-hidden="true" />
+              {microsoftBusy ? 'Redirigiendo…' : 'Conectar Microsoft'}
             </button>
           )}
         </div>
