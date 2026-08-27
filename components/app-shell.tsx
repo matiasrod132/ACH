@@ -25,12 +25,29 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user } = useGame()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
   const { title, subtitle } = TITLES[pathname] ?? TITLES['/']
 
   useEffect(() => {
     registerServiceWorker()
   }, [])
+
+  // Restore the desktop sidebar's collapsed/expanded state. Read after mount
+  // (not as the initial useState value) so server and first client render
+  // match — a stored "true" only takes effect once hydration is done.
+  useEffect(() => {
+    const stored = window.localStorage.getItem('starklab-sidebar-collapsed')
+    if (stored === 'true') setCollapsed(true)
+  }, [])
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      window.localStorage.setItem('starklab-sidebar-collapsed', String(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     // Background pushes are shown by the service worker automatically —
@@ -49,9 +66,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh">
-      <AppSidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <AppSidebar
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+      />
 
-      <div className="lg:pl-72">
+      <div className={collapsed ? 'lg:pl-[76px]' : 'lg:pl-72'}>
         <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
           {/* Top bar */}
           <header className="flex items-center gap-3">
