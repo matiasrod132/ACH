@@ -24,6 +24,7 @@ import {
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
 import { useGame } from "@/lib/game-context"
+import { usePageTab } from "@/lib/use-page-tab"
 import {
   createMovement,
   deleteMovement,
@@ -60,6 +61,7 @@ const CHART_VARS = [
 
 type Filter = "all" | "income" | "expense"
 type PageTab = "resumen" | "movimientos" | "metas" | "reportes" | "pagos"
+const PAGE_TABS = ["resumen", "movimientos", "metas", "reportes", "pagos"] as const
 
 function monthKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}`
@@ -105,7 +107,7 @@ export function FinanceDashboard() {
   const { data, isLoading, mutate } = useMovements(uid)
   const { data: budget = 0, mutate: mutateBudget } = useSWR(["budget", uid], () => fetchBudget(uid))
 
-  const [pageTab, setPageTab] = useState<PageTab>("resumen")
+  const [pageTab, setPageTab] = usePageTab<PageTab>(PAGE_TABS, "resumen")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Movement | null>(null)
   const [filter, setFilter] = useState<Filter>("all")

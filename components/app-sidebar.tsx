@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
   Zap,
   LogOut,
@@ -20,12 +20,28 @@ import {
   PanelLeftOpen,
   Command,
   ChevronRight,
-  ListChecks,
-  HeartPulse,
+  ArrowLeftRight,
+  Target,
+  BarChart3,
+  CalendarClock,
+  Utensils,
+  Scale,
+  Play,
+  CalendarDays,
+  TrendingUp,
+  Ruler,
 } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
 
-type NavLeaf = { href: string; label: string; icon: typeof LayoutGrid }
+type NavLeaf = {
+  href: string
+  label: string
+  icon: typeof LayoutGrid
+  /** For a tab sub-item: the exact `?tab=` value this link selects. Active
+   * state then depends on the URL's tab param, not just the pathname,
+   * since the default tab's href omits the query entirely. */
+  matchTab?: string
+}
 type NavGroup = { label: string; icon: typeof LayoutGrid; children: NavLeaf[] }
 type NavNode = NavLeaf | NavGroup
 
@@ -33,32 +49,61 @@ function isLeaf(node: NavNode): node is NavLeaf {
   return 'href' in node
 }
 
-// Real routes only, grouped the way they're actually related in the app —
-// no fabricated sub-pages. Dropdown groups mirror the "collapsible section"
-// pattern from the dashboard sidebar reference.
+// Real routes only. The dropdown groups below are each page's own real
+// tabs (see finance-dashboard.tsx, nutrition-section.tsx, gym-section.tsx)
+// mirrored into the sidebar via `?tab=` deep links — not invented pages.
 const NAV_TREE: NavNode[] = [
   { href: '/', label: 'Resumen', icon: LayoutGrid },
+  { href: '/hobbies', label: 'Hobbies', icon: Sparkles },
+  { href: '/tareas', label: 'Misiones diarias', icon: CircleCheckBig },
   {
-    label: 'Hábitos',
-    icon: ListChecks,
+    label: 'Finanzas',
+    icon: Wallet,
     children: [
-      { href: '/hobbies', label: 'Hobbies', icon: Sparkles },
-      { href: '/tareas', label: 'Misiones diarias', icon: CircleCheckBig },
+      { href: '/finanzas', label: 'Resumen', icon: LayoutGrid, matchTab: 'resumen' },
+      { href: '/finanzas?tab=movimientos', label: 'Movimientos', icon: ArrowLeftRight, matchTab: 'movimientos' },
+      { href: '/finanzas?tab=metas', label: 'Metas', icon: Target, matchTab: 'metas' },
+      { href: '/finanzas?tab=reportes', label: 'Reportes', icon: BarChart3, matchTab: 'reportes' },
+      { href: '/finanzas?tab=pagos', label: 'Pagos', icon: CalendarClock, matchTab: 'pagos' },
     ],
   },
-  { href: '/finanzas', label: 'Finanzas', icon: Wallet },
   {
-    label: 'Salud',
-    icon: HeartPulse,
+    label: 'Nutrición',
+    icon: Salad,
     children: [
-      { href: '/nutricion', label: 'Nutrición', icon: Salad },
-      { href: '/gym', label: 'Gym', icon: Dumbbell },
-      { href: '/agua', label: 'Hidratación', icon: Droplets },
+      { href: '/nutricion', label: 'Resumen', icon: LayoutGrid, matchTab: 'resumen' },
+      { href: '/nutricion?tab=comidas', label: 'Comidas', icon: Utensils, matchTab: 'comidas' },
+      { href: '/nutricion?tab=peso', label: 'Peso', icon: Scale, matchTab: 'peso' },
+      { href: '/nutricion?tab=objetivos', label: 'Objetivos', icon: Target, matchTab: 'objetivos' },
     ],
   },
+  {
+    label: 'Gym',
+    icon: Dumbbell,
+    children: [
+      { href: '/gym', label: 'Resumen', icon: LayoutGrid, matchTab: 'resumen' },
+      { href: '/gym?tab=rutinas', label: 'Rutinas', icon: Dumbbell, matchTab: 'rutinas' },
+      { href: '/gym?tab=registrar', label: 'Registrar', icon: Play, matchTab: 'registrar' },
+      { href: '/gym?tab=historial', label: 'Historial', icon: CalendarDays, matchTab: 'historial' },
+      { href: '/gym?tab=progreso', label: 'Progreso', icon: TrendingUp, matchTab: 'progreso' },
+      { href: '/gym?tab=medidas', label: 'Medidas', icon: Ruler, matchTab: 'medidas' },
+    ],
+  },
+  { href: '/agua', label: 'Hidratación', icon: Droplets },
 ]
 
-const FLAT_NAV: NavLeaf[] = NAV_TREE.flatMap((node) => (isLeaf(node) ? [node] : node.children))
+// Icon-rail (collapsed desktop) mode: one row per top-level item, groups
+// collapse to their default ("Resumen") tab since there's no room to
+// expand nested rows in a ~76px rail.
+const RAIL_NAV: NavLeaf[] = NAV_TREE.map((node) =>
+  isLeaf(node) ? node : { href: node.children[0].href, label: node.label, icon: node.icon },
+)
+
+// Search palette: every real destination, tabs included, labeled with
+// their group so e.g. "Movimientos" isn't ambiguous.
+const SEARCH_NAV: NavLeaf[] = NAV_TREE.flatMap((node) =>
+  isLeaf(node) ? [node] : node.children.map((child) => ({ ...child, label: `${node.label} · ${child.label}` })),
+)
 
 const BOTTOM_NAV: NavLeaf[] = [{ href: '/ajustes', label: 'Ajustes', icon: Settings }]
 
@@ -77,9 +122,11 @@ export function AppSidebar({
 }) {
   const { user, signOut, level, xpInLevel, xpForLevel, tasks } = useGame()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const pct = Math.min(100, Math.round((xpInLevel / xpForLevel) * 100))
   const pendingTasks = tasks.filter((t) => !t.done).length
+  const activeTab = searchParams.get('tab') ?? 'resumen'
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -112,7 +159,7 @@ export function AppSidebar({
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const all = [...FLAT_NAV, ...BOTTOM_NAV]
+    const all = [...SEARCH_NAV, ...BOTTOM_NAV]
     if (!q) return all
     return all.filter((item) => item.label.toLowerCase().includes(q))
   }, [query])
@@ -143,8 +190,14 @@ export function AppSidebar({
     onClose()
   }
 
+  function isActive(item: NavLeaf) {
+    const targetPath = item.href.split('?')[0]
+    if (item.matchTab) return pathname === targetPath && activeTab === item.matchTab
+    return pathname === item.href
+  }
+
   function renderLeaf(item: NavLeaf) {
-    const active = pathname === item.href
+    const active = isActive(item)
     const badge = item.href === '/tareas' && pendingTasks > 0 ? pendingTasks : null
     const Icon = item.icon
     return (
@@ -175,7 +228,7 @@ export function AppSidebar({
   }
 
   function renderGroup(group: NavGroup) {
-    const activeChild = group.children.some((c) => c.href === pathname)
+    const activeChild = group.children.some((c) => c.href.split('?')[0] === pathname)
     const open = !closedGroups[group.label] || activeChild
     const Icon = group.icon
     return (
@@ -293,9 +346,9 @@ export function AppSidebar({
         </div>
 
         {/* Nav */}
-        <nav className="mt-1 flex flex-1 flex-col gap-0.5 px-3">
+        <nav className="mt-1 flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
           {collapsed
-            ? FLAT_NAV.map((leaf) => renderLeaf(leaf))
+            ? RAIL_NAV.map((leaf) => renderLeaf(leaf))
             : NAV_TREE.map((node) => (isLeaf(node) ? renderLeaf(node) : renderGroup(node)))}
         </nav>
 

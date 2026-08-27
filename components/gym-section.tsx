@@ -18,6 +18,7 @@ import { computePersonalRecords, fetchWorkouts, workoutVolume, EXERCISE_LIBRARY,
 import { fetchWeightEntries, fetchNutritionProfile } from "@/lib/nutrition"
 import { toDisplayWeight, formatWeight } from "@/lib/units"
 import { useGame } from "@/lib/game-context"
+import { usePageTab } from "@/lib/use-page-tab"
 import { parseISODate, dateToISO, formatDate } from "@/lib/format"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { GymRoutines } from "@/components/gym-routines"
@@ -27,6 +28,7 @@ import { GymProgress } from "@/components/gym-progress"
 import { BodyMeasurements } from "@/components/body-measurements"
 
 type PageTab = "resumen" | "rutinas" | "registrar" | "historial" | "progreso" | "medidas"
+const PAGE_TABS = ["resumen", "rutinas", "registrar", "historial", "progreso", "medidas"] as const
 
 const MUSCLE_GROUP_BY_NAME = new Map(EXERCISE_LIBRARY.map((ex) => [ex.name, ex.muscleGroup]))
 
@@ -83,7 +85,7 @@ function StatTile({
 export function GymSection() {
   const { user } = useGame()
   const uid = user!.uid
-  const [pageTab, setPageTab] = useState<PageTab>("resumen")
+  const [pageTab, setPageTab] = usePageTab<PageTab>(PAGE_TABS, "resumen")
 
   const { data: workoutsData } = useSWR(["workouts", uid], () => fetchWorkouts(uid))
   const { data: weightData } = useSWR(["weight", uid], () => fetchWeightEntries(uid))

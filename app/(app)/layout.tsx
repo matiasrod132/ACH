@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import { GameProvider, useGame } from '@/lib/game-context'
 import { AuthScreen } from '@/components/auth-screen'
 import { AppShell } from '@/components/app-shell'
@@ -17,7 +18,18 @@ import { Toaster } from '@/components/ui/sonner'
 function Gate({ children }: { children: React.ReactNode }) {
   const { user } = useGame()
 
-  return user ? <AppShell>{children}</AppShell> : <AuthScreen />
+  // The Suspense boundary is required by the sidebar and the tabbed
+  // dashboards reading `useSearchParams()` (deep-linking into a specific
+  // tab, e.g. /finanzas?tab=movimientos). It's a no-op for the pre-render
+  // Google/crawlers see, since `user` starts null and that render always
+  // takes the AuthScreen branch above.
+  return user ? (
+    <Suspense fallback={null}>
+      <AppShell>{children}</AppShell>
+    </Suspense>
+  ) : (
+    <AuthScreen />
+  )
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
