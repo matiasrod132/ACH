@@ -4,6 +4,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   updateProfile,
   type User,
@@ -84,6 +86,16 @@ class MockAuth {
       resolve()
     })
   }
+
+  signInWithGoogle() {
+    return new Promise<StarkUser>((resolve) => {
+      setTimeout(() => {
+        this.currentUser = this.makeUser('demo@starklab.gg', 'Demo')
+        this.emit()
+        resolve(this.currentUser)
+      }, AUTH_DELAY)
+    })
+  }
 }
 
 const firebaseApp = hasFirebaseConfig ? (getApps().length ? getApps()[0] : initializeApp(firebaseConfig)) : null
@@ -140,6 +152,15 @@ class FirebaseAuthAdapter {
     }
 
     await signOut(this.auth)
+  }
+
+  async signInWithGoogle() {
+    if (!this.auth) {
+      return new MockAuth().signInWithGoogle()
+    }
+
+    const userCredential = await signInWithPopup(this.auth, new GoogleAuthProvider())
+    return this.mapUser(userCredential.user) as StarkUser
   }
 }
 

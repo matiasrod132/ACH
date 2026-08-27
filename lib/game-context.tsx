@@ -147,6 +147,7 @@ type GameContextValue = {
   authLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 
   totalXp: number
@@ -289,6 +290,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setRewards([])
   }, [])
 
+  const signInWithGoogle = useCallback(async () => {
+    await authService.signInWithGoogle()
+  }, [])
+
   const addHobby = useCallback(
     (data: Omit<Hobby, 'id'>) => {
       dispatch({ type: 'ADD_HOBBY', hobby: { ...data, id: `h_${Date.now()}` } })
@@ -341,6 +346,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     authLoading,
     signIn,
     register,
+    signInWithGoogle,
     signOut,
     totalXp: state.totalXp,
     level,
