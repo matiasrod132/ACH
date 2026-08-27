@@ -19,22 +19,50 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Command,
+  ChevronRight,
+  ListChecks,
+  HeartPulse,
 } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
 
-type NavEntry = { href: string; label: string; icon: typeof LayoutGrid }
+type NavLeaf = { href: string; label: string; icon: typeof LayoutGrid }
+type NavGroup = { label: string; icon: typeof LayoutGrid; children: NavLeaf[] }
+type NavNode = NavLeaf | NavGroup
 
-const NAV: NavEntry[] = [
+function isLeaf(node: NavNode): node is NavLeaf {
+  return 'href' in node
+}
+
+// Real routes only, grouped the way they're actually related in the app —
+// no fabricated sub-pages. Dropdown groups mirror the "collapsible section"
+// pattern from the dashboard sidebar reference.
+const NAV_TREE: NavNode[] = [
   { href: '/', label: 'Resumen', icon: LayoutGrid },
-  { href: '/hobbies', label: 'Hobbies', icon: Sparkles },
-  { href: '/tareas', label: 'Misiones diarias', icon: CircleCheckBig },
+  {
+    label: 'Hábitos',
+    icon: ListChecks,
+    children: [
+      { href: '/hobbies', label: 'Hobbies', icon: Sparkles },
+      { href: '/tareas', label: 'Misiones diarias', icon: CircleCheckBig },
+    ],
+  },
   { href: '/finanzas', label: 'Finanzas', icon: Wallet },
-  { href: '/nutricion', label: 'Nutrición', icon: Salad },
-  { href: '/gym', label: 'Gym', icon: Dumbbell },
-  { href: '/agua', label: 'Hidratación', icon: Droplets },
+  {
+    label: 'Salud',
+    icon: HeartPulse,
+    children: [
+      { href: '/nutricion', label: 'Nutrición', icon: Salad },
+      { href: '/gym', label: 'Gym', icon: Dumbbell },
+      { href: '/agua', label: 'Hidratación', icon: Droplets },
+    ],
+  },
 ]
 
-const BOTTOM_NAV: NavEntry[] = [{ href: '/ajustes', label: 'Ajustes', icon: Settings }]
+const FLAT_NAV: NavLeaf[] = NAV_TREE.flatMap((node) => (isLeaf(node) ? [node] : node.children))
+
+const BOTTOM_NAV: NavLeaf[] = [{ href: '/ajustes', label: 'Ajustes', icon: Settings }]
+
+const GROUPS_STORAGE_KEY = 'starklab-sidebar-closed-groups'
 
 export function AppSidebar({
   open,
@@ -57,9 +85,34 @@ export function AppSidebar({
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // Which dropdown groups the user has explicitly collapsed. Undefined /
+  // missing means "open" — so groups default to open on first visit.
+  const [closedGroups, setClosedGroups] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(GROUPS_STORAGE_KEY)
+      if (stored) setClosedGroups(JSON.parse(stored))
+    } catch {
+      // ignore malformed/unavailable storage
+    }
+  }, [])
+
+  function toggleGroup(label: string) {
+    setClosedGroups((prev) => {
+      const next = { ...prev, [label]: !prev[label] }
+      try {
+        window.localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const all = [...NAV, ...BOTTOM_NAV]
+    const all = [...FLAT_NAV, ...BOTTOM_NAV]
     if (!q) return all
     return all.filter((item) => item.label.toLowerCase().includes(q))
   }, [query])
@@ -88,6 +141,73 @@ export function AppSidebar({
     router.push(href)
     setSearchOpen(false)
     onClose()
+  }
+
+  function renderLeaf(item: NavLeaf) {
+    const active = pathname === item.href
+    const badge = item.href === '/tareas' && pendingTasks > 0 ? pendingTasks : null
+    const Icon = item.icon
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={onClose}
+        title={collapsed ? item.label : undefined}
+        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'} ${
+          active
+            ? 'bg-secondary text-foreground'
+            : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+        }`}
+      >
+        <span className="flex items-center gap-3">
+          <Icon className="size-[17px] shrink-0" aria-hidden="true" />
+          <span className={collapsed ? 'lg:hidden' : ''}>{item.label}</span>
+        </span>
+        {badge !== null && (
+          <span
+            className={`grid min-w-5 place-items-center rounded-full bg-tasks/18 px-1.5 py-0.5 text-[10px] font-semibold text-tasks ${collapsed ? 'lg:hidden' : ''}`}
+          >
+            {badge}
+          </span>
+        )}
+      </Link>
+    )
+  }
+
+  function renderGroup(group: NavGroup) {
+    const activeChild = group.children.some((c) => c.href === pathname)
+    const open = !closedGroups[group.label] || activeChild
+    const Icon = group.icon
+    return (
+      <div key={group.label} className="flex flex-col">
+        <button
+          type="button"
+          onClick={() => toggleGroup(group.label)}
+          title={collapsed ? group.label : undefined}
+          className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${
+            activeChild ? 'text-foreground' : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+          }`}
+        >
+          <span className="flex items-center gap-3">
+            <Icon className="size-[17px] shrink-0" aria-hidden="true" />
+            <span className={collapsed ? 'lg:hidden' : ''}>{group.label}</span>
+          </span>
+          <ChevronRight
+            className={`size-3.5 shrink-0 text-muted-foreground/60 transition-transform duration-200 ${open ? 'rotate-90' : ''} ${collapsed ? 'lg:hidden' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+        <div
+          className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${collapsed ? 'lg:hidden' : ''} ${
+            open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          }`}
+        >
+          <div className="flex min-h-0 flex-col gap-0.5 overflow-hidden pl-[26px]">
+            {group.children.map((leaf) => renderLeaf(leaf))}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -174,58 +294,14 @@ export function AppSidebar({
 
         {/* Nav */}
         <nav className="mt-1 flex flex-1 flex-col gap-0.5 px-3">
-          {NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href
-            const badge = href === '/tareas' && pendingTasks > 0 ? pendingTasks : null
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onClose}
-                title={collapsed ? label : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'} ${
-                  active
-                    ? 'bg-secondary text-foreground'
-                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <Icon className="size-[17px] shrink-0" aria-hidden="true" />
-                  <span className={collapsed ? 'lg:hidden' : ''}>{label}</span>
-                </span>
-                {badge !== null && (
-                  <span
-                    className={`grid min-w-5 place-items-center rounded-full bg-tasks/18 px-1.5 py-0.5 text-[10px] font-semibold text-tasks ${collapsed ? 'lg:hidden' : ''}`}
-                  >
-                    {badge}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
+          {collapsed
+            ? FLAT_NAV.map((leaf) => renderLeaf(leaf))
+            : NAV_TREE.map((node) => (isLeaf(node) ? renderLeaf(node) : renderGroup(node)))}
         </nav>
 
         {/* Bottom nav + collapse toggle + sign out */}
         <div className="flex flex-col gap-0.5 border-t border-border/60 p-3">
-          {BOTTOM_NAV.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onClose}
-                title={collapsed ? label : undefined}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${collapsed ? 'lg:justify-center lg:px-0' : ''} ${
-                  active
-                    ? 'bg-secondary text-foreground'
-                    : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
-                }`}
-              >
-                <Icon className="size-[17px] shrink-0" aria-hidden="true" />
-                <span className={collapsed ? 'lg:hidden' : ''}>{label}</span>
-              </Link>
-            )
-          })}
+          {BOTTOM_NAV.map((leaf) => renderLeaf(leaf))}
           <button
             type="button"
             onClick={() => signOut()}
